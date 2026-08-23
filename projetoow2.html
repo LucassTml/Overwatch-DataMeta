@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Knowledge Graph — Overwatch 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  :root{
+    --bg:#080b10;
+    --bg-panel:#10161f;
+    --bg-panel-2:#161e2a;
+    --line:#22303f;
+    --text:#eef2f6;
+    --text-dim:#7c8b9c;
+    --orange:#ff9d1a;
+    --cyan:#3ad6ff;
+    --green:#7fd858;
+    --purple:#b98aff;
+    --gold:#ffd75e;
+    --pink:#ff5c7a;
+    --grey:#6e7d8d;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;overflow:hidden;}
+
+  .app{position:relative;width:100vw;height:100vh;}
+
+  .app::before{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+    background-image:
+      linear-gradient(rgba(58,214,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(58,214,255,0.04) 1px, transparent 1px);
+    background-size: 42px 42px;
+  }
+
+  svg{position:absolute;inset:0;width:100%;height:100%;cursor:grab;z-index:1;}
+  svg:active{cursor:grabbing;}
+
+  /* ---------- topo ---------- */
+  .topbar{
+    position:absolute;top:0;left:0;right:0;z-index:5;
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:14px 22px;
+    background:linear-gradient(180deg, rgba(8,11,16,0.95), rgba(8,11,16,0.0));
+    pointer-events:none;
+  }
+  .topbar > *{pointer-events:auto;}
+  .brand{display:flex;flex-direction:column;line-height:1;margin-right:8px;}
+  .brand .eyebrow{font-family:'Rajdhani';font-size:11px;letter-spacing:.28em;color:var(--orange);font-weight:700;}
+  .brand h1{font-family:'Orbitron';font-size:19px;margin:2px 0 0;letter-spacing:.03em;font-weight:800;
+    background:linear-gradient(90deg,#fff,var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent;}
+
+  .search-wrap{position:relative;flex:0 0 220px;}
+  .search-wrap input{
+    width:100%;background:var(--bg-panel);border:1px solid var(--line);color:var(--text);
+    font-family:'Rajdhani';font-weight:600;font-size:14px;padding:9px 12px 9px 34px;
+    clip-path:polygon(10px 0,100% 0,100% 100%,0 100%,0 10px);
+    outline:none;
+  }
+  .search-wrap input:focus{border-color:var(--cyan);}
+  .search-wrap svg.icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;stroke:var(--text-dim);}
+  .search-wrap input::placeholder{color:var(--text-dim);}
+
+  .chip-row{display:flex;gap:6px;flex-wrap:wrap;}
+  .chip{
+    font-family:'Rajdhani';font-weight:700;font-size:12px;letter-spacing:.02em;
+    padding:6px 12px;border:1px solid var(--line);background:var(--bg-panel);color:var(--text-dim);
+    cursor:pointer;user-select:none;
+    clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px);
+    transition:all .15s ease;
+  }
+  .chip.on{color:#0a0e14;border-color:transparent;}
+  .chip:hover{filter:brightness(1.15);}
+
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;}
+  .btn{
+    font-family:'Rajdhani';font-weight:700;font-size:12.5px;letter-spacing:.02em;
+    padding:8px 13px;border:1px solid var(--line);background:var(--bg-panel);color:var(--text);
+    cursor:pointer;display:flex;align-items:center;gap:6px;
+    clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px);
+    transition:all .15s ease;
+  }
+  .btn:hover{border-color:var(--cyan);color:var(--cyan);}
+  .btn.primary{background:var(--orange);color:#0a0e14;border-color:transparent;}
+  .btn.primary:hover{filter:brightness(1.1);color:#0a0e14;}
+  .btn.danger{background:transparent;border-color:var(--pink);color:var(--pink);}
+  .btn.danger:hover{background:var(--pink);color:#0a0e14;}
+  .btn.small{padding:5px 9px;font-size:11px;}
+
+  .helptext{
+    position:absolute;bottom:16px;left:22px;z-index:5;
+    font-size:12px;color:var(--text-dim);font-family:'Rajdhani';font-weight:600;
+    background:rgba(16,22,31,0.7);padding:8px 12px;
+    clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px);
+    border:1px solid var(--line);
+  }
+  .helptext b{color:var(--text);}
+
+  /* ---------- legenda ---------- */
+  .legend{
+    position:absolute;bottom:16px;right:16px;z-index:5;
+    background:rgba(16,22,31,0.85);border:1px solid var(--line);
+    padding:12px 14px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+    font-size:12px;
+  }
+  .legend .title{font-family:'Orbitron';font-size:10px;letter-spacing:.15em;color:var(--text-dim);margin-bottom:8px;}
+  .legend-row{display:flex;align-items:center;gap:8px;margin:4px 0;font-weight:600;}
+  .swatch{width:11px;height:11px;flex:0 0 auto;}
+  .swatch.hex{clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);}
+
+  /* ---------- painel lateral ---------- */
+  .panel{
+    position:absolute;top:0;right:0;height:100%;width:340px;z-index:10;
+    background:var(--bg-panel);border-left:1px solid var(--line);
+    transform:translateX(100%);transition:transform .28s cubic-bezier(.2,.8,.2,1);
+    display:flex;flex-direction:column;
+  }
+  .panel.open{transform:translateX(0);}
+  .panel-head{
+    padding:20px 20px 14px;border-bottom:1px solid var(--line);position:relative;
+    background:var(--bg-panel-2);
+  }
+  .panel-head::before{
+    content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--type-color,var(--orange));
+  }
+  .panel-close{
+    position:absolute;top:14px;right:14px;background:none;border:none;color:var(--text-dim);
+    font-size:18px;cursor:pointer;font-family:'Rajdhani';
+  }
+  .panel-close:hover{color:var(--text);}
+  .panel-type{
+    display:inline-block;font-family:'Orbitron';font-size:10px;letter-spacing:.12em;
+    padding:3px 9px;color:#0a0e14;background:var(--type-color,var(--orange));margin-bottom:10px;
+  }
+  .panel-head h2{margin:0;font-family:'Orbitron';font-size:20px;font-weight:800;}
+  .panel-body{padding:16px 20px;overflow-y:auto;flex:1;}
+  .panel-section{margin-bottom:18px;}
+  .panel-section .label{font-family:'Orbitron';font-size:10px;letter-spacing:.15em;color:var(--text-dim);margin-bottom:8px;}
+  .prop-line{font-size:14px;margin-bottom:6px;color:var(--text-dim);}
+  .prop-line b{color:var(--text);font-weight:600;}
+  .panel-footer{padding:14px 20px;border-top:1px solid var(--line);}
+
+  .rel-group{margin-bottom:12px;}
+  .rel-group .rel-type{font-family:'Rajdhani';font-weight:700;font-size:12px;margin-bottom:6px;
+    display:flex;align-items:center;gap:6px;}
+  .rel-dot{width:8px;height:8px;border-radius:50%;}
+  .rel-item{
+    display:flex;justify-content:space-between;align-items:center;gap:8px;
+    padding:7px 10px;background:var(--bg);border:1px solid var(--line);margin-bottom:5px;
+    font-size:13px;font-weight:600;transition:border-color .15s;
+  }
+  .rel-item .rel-main{cursor:pointer;flex:1;}
+  .rel-item:hover{border-color:var(--cyan);}
+  .rel-item .motivo{display:block;font-size:11px;font-weight:500;color:var(--text-dim);margin-top:3px;}
+  .rel-item .rel-del{color:var(--text-dim);flex:0 0 auto;cursor:pointer;font-size:14px;padding:0 2px;}
+  .rel-item .rel-del:hover{color:var(--pink);}
+
+  /* ---------- modal ---------- */
+  .modal-overlay{
+    position:absolute;inset:0;z-index:20;background:rgba(4,6,9,0.72);
+    display:none;align-items:center;justify-content:center;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal{
+    width:380px;max-height:82vh;overflow-y:auto;background:var(--bg-panel);border:1px solid var(--line);
+    clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+  }
+  .modal-head{padding:16px 20px;border-bottom:1px solid var(--line);background:var(--bg-panel-2);
+    font-family:'Orbitron';font-size:14px;letter-spacing:.06em;display:flex;justify-content:space-between;align-items:center;}
+  .modal-head button{background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;}
+  .modal-body{padding:18px 20px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:11px;font-family:'Orbitron';letter-spacing:.1em;color:var(--text-dim);margin-bottom:6px;}
+  .field input, .field select, .field textarea{
+    width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);
+    font-family:'Rajdhani';font-weight:600;font-size:14px;padding:8px 10px;outline:none;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{border-color:var(--cyan);}
+  .field textarea{resize:vertical;min-height:56px;font-weight:500;}
+  .field .hint{font-size:11px;color:var(--text-dim);margin-top:4px;font-weight:500;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;}
+  .error-msg{color:var(--pink);font-size:12px;font-weight:700;margin-top:8px;display:none;}
+  .error-msg.show{display:block;}
+
+  /* ---------- nodes/links ---------- */
+  .link{fill:none;}
+  .link.counter{stroke:var(--pink);stroke-width:1.6;}
+  .link.sinergia{stroke:var(--green);stroke-width:1.6;}
+  .link.estrutural{stroke:var(--line);stroke-width:1;}
+  .link.dim{opacity:0.06;}
+  .link.hi{opacity:1;}
+
+  .node-label{font-family:'Rajdhani';font-weight:700;fill:var(--text);pointer-events:none;paint-order:stroke;stroke:var(--bg);stroke-width:3px;}
+  .node-label.small{font-size:9px;font-weight:600;fill:var(--text-dim);}
+  .node-shape{stroke:#0a0e14;stroke-width:1.3px;cursor:pointer;}
+  .node-shape.dim{opacity:0.12;}
+  .node-shape.selected{stroke:#fff;stroke-width:2.5px;}
+  .node-group.dim .node-label{opacity:0.10;}
+
+  .toast{
+    position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:30;
+    background:var(--bg-panel);border:1px solid var(--cyan);color:var(--text);
+    padding:9px 16px;font-family:'Rajdhani';font-weight:700;font-size:13px;
+    clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px);
+    opacity:0;pointer-events:none;transition:opacity .25s ease;
+  }
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div class="app">
+  <svg id="canvas"></svg>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="eyebrow">KNOWLEDGE GRAPH</span>
+      <h1>OVERWATCH // TÁTICAS</h1>
+    </div>
+    <div class="search-wrap">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="search" type="text" placeholder="Buscar herói, classe, mapa...">
+    </div>
+    <div class="chip-row" id="type-chips"></div>
+    <div class="chip-row" id="rel-chips"></div>
+    <div class="actions">
+      <button class="btn primary" id="btn-add-node">+ Nó</button>
+      <button class="btn" id="btn-add-edge">+ Relação</button>
+      <button class="btn" id="btn-export">⭳ Exportar</button>
+      <button class="btn" id="btn-import">⭱ Importar</button>
+      <button class="btn" id="btn-reset">↺ Restaurar</button>
+      <input type="file" id="file-import" accept="application/json" style="display:none;">
+    </div>
+  </div>
+
+  <div class="helptext">
+    <b>Arraste</b> para mover · <b>Scroll</b> para zoom · <b>Clique</b> num nó para detalhes e editar
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="panel" id="panel">
+    <div class="panel-head">
+      <button class="panel-close" id="panel-close">✕</button>
+      <div class="panel-type" id="panel-type">TIPO</div>
+      <h2 id="panel-name">Nome</h2>
+    </div>
+    <div class="panel-body" id="panel-body"></div>
+    <div class="panel-footer">
+      <button class="btn danger" id="btn-remove-node" style="width:100%;justify-content:center;">🗑 Remover este nó</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="modal"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+const RAW_DATA = {"nos": [{"id": "classe_tanque", "tipo": "Classe", "nome": "Tanque", "propriedades": {}}, {"id": "classe_dano", "tipo": "Classe", "nome": "Dano", "propriedades": {}}, {"id": "classe_suporte", "tipo": "Classe", "nome": "Suporte", "propriedades": {}}, {"id": "sub_bruiser", "tipo": "Subclasse", "nome": "Bruiser", "propriedades": {"passiva": "Reduz dano crítico recebido; ganha velocidade em vida crítica"}}, {"id": "sub_stalwart", "tipo": "Subclasse", "nome": "Stalwart", "propriedades": {"passiva": "Reduz efeito de recuo (knockback) e de lentidão sofridos"}}, {"id": "sub_iniciador", "tipo": "Subclasse", "nome": "Iniciador", "propriedades": {"passiva": "Cura leve enquanto está no ar (mobilidade aérea)"}}, {"id": "sub_flanker", "tipo": "Subclasse", "nome": "Flanker", "propriedades": {"passiva": "Kits de saúde curam uma quantidade maior de vida"}}, {"id": "sub_specialist", "tipo": "Subclasse", "nome": "Specialist", "propriedades": {"passiva": "Recarrega a arma mais rápido logo após um abate"}}, {"id": "sub_sharpshooter", "tipo": "Subclasse", "nome": "Sharpshooter", "propriedades": {"passiva": "Acertos críticos reduzem o tempo de recarga de habilidades de movimento"}}, {"id": "sub_recon", "tipo": "Subclasse", "nome": "Recon", "propriedades": {"passiva": "Revela inimigos com pouca vida através de paredes após causar dano"}}, {"id": "sub_medic", "tipo": "Subclasse", "nome": "Medic", "propriedades": {"passiva": "Foco em cura direta e sustentação do time"}}, {"id": "sub_tactician", "tipo": "Subclasse", "nome": "Tactician", "propriedades": {"passiva": "Pode acumular carga extra de ultimate, que não se perde ao usá-la"}}, {"id": "sub_survivor", "tipo": "Subclasse", "nome": "Survivor", "propriedades": {"passiva": "Maior capacidade de auto-sustentação em combate corpo a corpo"}}, {"id": "org_overwatch", "tipo": "Organizacao", "nome": "Overwatch", "propriedades": {}}, {"id": "org_talon", "tipo": "Organizacao", "nome": "Talon", "propriedades": {}}, {"id": "org_deadlock", "tipo": "Organizacao", "nome": "Deadlock Gang", "propriedades": {}}, {"id": "org_shambali", "tipo": "Organizacao", "nome": "Ordem Shambali", "propriedades": {}}, {"id": "org_nullsector", "tipo": "Organizacao", "nome": "Null Sector", "propriedades": {}}, {"id": "org_horizon", "tipo": "Organizacao", "nome": "Colônia Lunar Horizon", "propriedades": {}}, {"id": "nac_alemanha", "tipo": "Nacionalidade", "nome": "Alemanha", "propriedades": {}}, {"id": "nac_holanda", "tipo": "Nacionalidade", "nome": "Holanda", "propriedades": {}}, {"id": "nac_nigeria", "tipo": "Nacionalidade", "nome": "Nigeria", "propriedades": {}}, {"id": "nac_australia", "tipo": "Nacionalidade", "nome": "Australia", "propriedades": {}}, {"id": "nac_coreia_do_sul", "tipo": "Nacionalidade", "nome": "Coreia do Sul", "propriedades": {}}, {"id": "nac_japao", "tipo": "Nacionalidade", "nome": "Japao", "propriedades": {}}, {"id": "nac_reino_unido", "tipo": "Nacionalidade", "nome": "Reino Unido", "propriedades": {}}, {"id": "nac_suecia", "tipo": "Nacionalidade", "nome": "Suecia", "propriedades": {}}, {"id": "nac_china", "tipo": "Nacionalidade", "nome": "China", "propriedades": {}}, {"id": "nac_estados_unidos", "tipo": "Nacionalidade", "nome": "Estados Unidos", "propriedades": {}}, {"id": "nac_franca", "tipo": "Nacionalidade", "nome": "Franca", "propriedades": {}}, {"id": "nac_egito", "tipo": "Nacionalidade", "nome": "Egito", "propriedades": {}}, {"id": "nac_mexico", "tipo": "Nacionalidade", "nome": "Mexico", "propriedades": {}}, {"id": "nac_suica", "tipo": "Nacionalidade", "nome": "Suica", "propriedades": {}}, {"id": "nac_haiti", "tipo": "Nacionalidade", "nome": "Haiti", "propriedades": {}}, {"id": "nac_irlanda", "tipo": "Nacionalidade", "nome": "Irlanda", "propriedades": {}}, {"id": "nac_brasil", "tipo": "Nacionalidade", "nome": "Brasil", "propriedades": {}}, {"id": "nac_nepal", "tipo": "Nacionalidade", "nome": "Nepal", "propriedades": {}}, {"id": "mapa_kings_row", "tipo": "Mapa", "nome": "King's Row", "propriedades": {}}, {"id": "mapa_hanamura", "tipo": "Mapa", "nome": "Hanamura", "propriedades": {}}, {"id": "mapa_numbani", "tipo": "Mapa", "nome": "Numbani", "propriedades": {}}, {"id": "mapa_route_66", "tipo": "Mapa", "nome": "Route 66", "propriedades": {}}, {"id": "mapa_ilios", "tipo": "Mapa", "nome": "Ilios", "propriedades": {}}, {"id": "mapa_eichenwalde", "tipo": "Mapa", "nome": "Eichenwalde", "propriedades": {}}, {"id": "heroi_reinhardt", "tipo": "Heroi", "nome": "Reinhardt", "propriedades": {}}, {"id": "habilidade_reinhardt", "tipo": "Habilidade", "nome": "Fúria Marcial", "propriedades": {"heroi": "Reinhardt"}}, {"id": "heroi_sigma", "tipo": "Heroi", "nome": "Sigma", "propriedades": {}}, {"id": "habilidade_sigma", "tipo": "Habilidade", "nome": "Colapso Gravítico", "propriedades": {"heroi": "Sigma"}}, {"id": "heroi_doomfist", "tipo": "Heroi", "nome": "Doomfist", "propriedades": {}}, {"id": "habilidade_doomfist", "tipo": "Habilidade", "nome": "Mão do Destino", "propriedades": {"heroi": "Doomfist"}}, {"id": "heroi_roadhog", "tipo": "Heroi", "nome": "Roadhog", "propriedades": {}}, {"id": "habilidade_roadhog", "tipo": "Habilidade", "nome": "Gancho de Corrente", "propriedades": {"heroi": "Roadhog"}}, {"id": "heroi_winston", "tipo": "Heroi", "nome": "Winston", "propriedades": {}}, {"id": "habilidade_winston", "tipo": "Habilidade", "nome": "Fúria Primata", "propriedades": {"heroi": "Winston"}}, {"id": "heroi_dva", "tipo": "Heroi", "nome": "D.Va", "propriedades": {}}, {"id": "habilidade_dva", "tipo": "Habilidade", "nome": "Autodestruição do Mech", "propriedades": {"heroi": "D.Va"}}, {"id": "heroi_genji", "tipo": "Heroi", "nome": "Genji", "propriedades": {}}, {"id": "habilidade_genji", "tipo": "Habilidade", "nome": "Lâmina do Dragão", "propriedades": {"heroi": "Genji"}}, {"id": "heroi_tracer", "tipo": "Heroi", "nome": "Tracer", "propriedades": {}}, {"id": "habilidade_tracer", "tipo": "Habilidade", "nome": "Bomba Pulsante", "propriedades": {"heroi": "Tracer"}}, {"id": "heroi_torbjorn", "tipo": "Heroi", "nome": "Torbjörn", "propriedades": {}}, {"id": "habilidade_torbjorn", "tipo": "Habilidade", "nome": "Torreta Automática", "propriedades": {"heroi": "Torbjörn"}}, {"id": "heroi_mei", "tipo": "Heroi", "nome": "Mei", "propriedades": {}}, {"id": "habilidade_mei", "tipo": "Habilidade", "nome": "Bloco de Gelo", "propriedades": {"heroi": "Mei"}}, {"id": "heroi_ashe", "tipo": "Heroi", "nome": "Ashe", "propriedades": {}}, {"id": "habilidade_ashe", "tipo": "Habilidade", "nome": "B.O.B.", "propriedades": {"heroi": "Ashe"}}, {"id": "heroi_widowmaker", "tipo": "Heroi", "nome": "Widowmaker", "propriedades": {}}, {"id": "habilidade_widowmaker", "tipo": "Habilidade", "nome": "Infra-Visão", "propriedades": {"heroi": "Widowmaker"}}, {"id": "heroi_pharah", "tipo": "Heroi", "nome": "Pharah", "propriedades": {}}, {"id": "habilidade_pharah", "tipo": "Habilidade", "nome": "Barragem de Foguetes", "propriedades": {"heroi": "Pharah"}}, {"id": "heroi_sombra", "tipo": "Heroi", "nome": "Sombra", "propriedades": {}}, {"id": "habilidade_sombra", "tipo": "Habilidade", "nome": "EMP", "propriedades": {"heroi": "Sombra"}}, {"id": "heroi_ana", "tipo": "Heroi", "nome": "Ana", "propriedades": {}}, {"id": "habilidade_ana", "tipo": "Habilidade", "nome": "Tiro de Bio-Granada", "propriedades": {"heroi": "Ana"}}, {"id": "heroi_mercy", "tipo": "Heroi", "nome": "Mercy", "propriedades": {}}, {"id": "habilidade_mercy", "tipo": "Habilidade", "nome": "Ressuscitar", "propriedades": {"heroi": "Mercy"}}, {"id": "heroi_zenyatta", "tipo": "Heroi", "nome": "Zenyatta", "propriedades": {}}, {"id": "habilidade_zenyatta", "tipo": "Habilidade", "nome": "Transcendência", "propriedades": {"heroi": "Zenyatta"}}, {"id": "heroi_baptiste", "tipo": "Heroi", "nome": "Baptiste", "propriedades": {}}, {"id": "habilidade_baptiste", "tipo": "Habilidade", "nome": "Campo de Imunidade", "propriedades": {"heroi": "Baptiste"}}, {"id": "heroi_moira", "tipo": "Heroi", "nome": "Moira", "propriedades": {}}, {"id": "habilidade_moira", "tipo": "Habilidade", "nome": "Coalescência", "propriedades": {"heroi": "Moira"}}, {"id": "heroi_lucio", "tipo": "Heroi", "nome": "Lúcio", "propriedades": {}}, {"id": "habilidade_lucio", "tipo": "Habilidade", "nome": "Barreira Sonora", "propriedades": {"heroi": "Lúcio"}}, {"id": "sub_incursao", "tipo": "Subclasse", "nome": "Incursão", "propriedades": {"passiva": "Tanques ágeis focados em iniciar e desestabilizar o time adversário"}}, {"id": "sub_robustez", "tipo": "Subclasse", "nome": "Robustez", "propriedades": {"passiva": "Tanques com grande volume de vida e controle de área, absorvendo dano"}}, {"id": "sub_combate", "tipo": "Subclasse", "nome": "Combate", "propriedades": {"passiva": "Tanques de dano sustentado e presença constante na linha de frente"}}, {"id": "sub_especialidade", "tipo": "Subclasse", "nome": "Especialidade", "propriedades": {"passiva": "Heróis de dano com utilidade situacional e controle de área"}}, {"id": "sub_artilharia", "tipo": "Subclasse", "nome": "Artilharia", "propriedades": {"passiva": "Heróis de dano de médio/longo alcance com alto dano por acerto"}}, {"id": "sub_reconhecimento", "tipo": "Subclasse", "nome": "Reconhecimento", "propriedades": {"passiva": "Heróis de dano com mobilidade e capacidade de obter informação"}}, {"id": "sub_flanqueamento", "tipo": "Subclasse", "nome": "Flanqueamento", "propriedades": {"passiva": "Heróis de dano corpo a corpo/curto alcance especializados em flanquear"}}, {"id": "sub_estrategia", "tipo": "Subclasse", "nome": "Estratégia", "propriedades": {"passiva": "Suportes focados em cura em área e utilidade ofensiva para o time"}}, {"id": "sub_restauracao", "tipo": "Subclasse", "nome": "Restauração", "propriedades": {"passiva": "Suportes focados em cura direta e resgate de aliados"}}, {"id": "sub_sobrevivencia", "tipo": "Subclasse", "nome": "Sobrevivência", "propriedades": {"passiva": "Suportes com maior autossuficiência em combate corpo a corpo"}}, {"id": "nac_escocia", "tipo": "Nacionalidade", "nome": "Escócia", "propriedades": {}}, {"id": "nac_samoa", "tipo": "Nacionalidade", "nome": "Samoa", "propriedades": {}}, {"id": "nac_russia", "tipo": "Nacionalidade", "nome": "Rússia", "propriedades": {}}, {"id": "nac_lua", "tipo": "Nacionalidade", "nome": "Lua", "propriedades": {}}, {"id": "nac_singapura", "tipo": "Nacionalidade", "nome": "Singapura", "propriedades": {}}, {"id": "nac_canada", "tipo": "Nacionalidade", "nome": "Canadá", "propriedades": {}}, {"id": "nac_india", "tipo": "Nacionalidade", "nome": "Índia", "propriedades": {}}, {"id": "nac_peru", "tipo": "Nacionalidade", "nome": "Peru", "propriedades": {}}, {"id": "nac_marte", "tipo": "Nacionalidade", "nome": "Marte", "propriedades": {}}, {"id": "nac_tailandia", "tipo": "Nacionalidade", "nome": "Tailândia", "propriedades": {}}, {"id": "nac_numbani", "tipo": "Nacionalidade", "nome": "Numbani", "propriedades": {}}, {"id": "org_junkers", "tipo": "Organizacao", "nome": "Junkers", "propriedades": {}}, {"id": "org_vishkar", "tipo": "Organizacao", "nome": "Vishkar", "propriedades": {}}, {"id": "org_numbani", "tipo": "Organizacao", "nome": "Numbani", "propriedades": {}}, {"id": "org_shimada", "tipo": "Organizacao", "nome": "Clã Shimada", "propriedades": {}}, {"id": "heroi_hazard", "tipo": "Heroi", "nome": "Hazard", "propriedades": {}}, {"id": "habilidade_hazard", "tipo": "Habilidade", "nome": "Downpour", "propriedades": {"heroi": "Hazard"}}, {"id": "heroi_mauga", "tipo": "Heroi", "nome": "Mauga", "propriedades": {}}, {"id": "habilidade_mauga", "tipo": "Habilidade", "nome": "Cage Fight", "propriedades": {"heroi": "Mauga"}}, {"id": "heroi_orisa", "tipo": "Heroi", "nome": "Orisa", "propriedades": {}}, {"id": "habilidade_orisa", "tipo": "Habilidade", "nome": "Terra Surge", "propriedades": {"heroi": "Orisa"}}, {"id": "heroi_rainha_junker", "tipo": "Heroi", "nome": "Rainha Junker", "propriedades": {}}, {"id": "habilidade_rainha_junker", "tipo": "Habilidade", "nome": "Rampage", "propriedades": {"heroi": "Rainha Junker"}}, {"id": "heroi_ramattra", "tipo": "Heroi", "nome": "Ramattra", "propriedades": {}}, {"id": "habilidade_ramattra", "tipo": "Habilidade", "nome": "Annihilation", "propriedades": {"heroi": "Ramattra"}}, {"id": "heroi_wrecking_ball", "tipo": "Heroi", "nome": "Wrecking Ball", "propriedades": {}}, {"id": "habilidade_wrecking_ball", "tipo": "Habilidade", "nome": "Minefield", "propriedades": {"heroi": "Wrecking Ball"}}, {"id": "heroi_zarya", "tipo": "Heroi", "nome": "Zarya", "propriedades": {}}, {"id": "habilidade_zarya", "tipo": "Habilidade", "nome": "Graviton Surge", "propriedades": {"heroi": "Zarya"}}, {"id": "heroi_bastion", "tipo": "Heroi", "nome": "Bastion", "propriedades": {}}, {"id": "habilidade_bastion", "tipo": "Habilidade", "nome": "Configuration: Artillery", "propriedades": {"heroi": "Bastion"}}, {"id": "heroi_cassidy", "tipo": "Heroi", "nome": "Cassidy", "propriedades": {}}, {"id": "habilidade_cassidy", "tipo": "Habilidade", "nome": "Deadeye", "propriedades": {"heroi": "Cassidy"}}, {"id": "heroi_echo", "tipo": "Heroi", "nome": "Echo", "propriedades": {}}, {"id": "habilidade_echo", "tipo": "Habilidade", "nome": "Duplicate", "propriedades": {"heroi": "Echo"}}, {"id": "heroi_freja", "tipo": "Heroi", "nome": "Freja", "propriedades": {}}, {"id": "habilidade_freja", "tipo": "Habilidade", "nome": "Habilidade principal de Freja", "propriedades": {"heroi": "Freja"}}, {"id": "heroi_hanzo", "tipo": "Heroi", "nome": "Hanzo", "propriedades": {}}, {"id": "habilidade_hanzo", "tipo": "Habilidade", "nome": "Dragonstrike", "propriedades": {"heroi": "Hanzo"}}, {"id": "heroi_junkrat", "tipo": "Heroi", "nome": "Junkrat", "propriedades": {}}, {"id": "habilidade_junkrat", "tipo": "Habilidade", "nome": "RIP-Tire", "propriedades": {"heroi": "Junkrat"}}, {"id": "heroi_reaper", "tipo": "Heroi", "nome": "Reaper", "propriedades": {}}, {"id": "habilidade_reaper", "tipo": "Habilidade", "nome": "Death Blossom", "propriedades": {"heroi": "Reaper"}}, {"id": "heroi_soldado76", "tipo": "Heroi", "nome": "Soldado: 76", "propriedades": {}}, {"id": "habilidade_soldado76", "tipo": "Habilidade", "nome": "Tactical Visor", "propriedades": {"heroi": "Soldado: 76"}}, {"id": "heroi_sojourn", "tipo": "Heroi", "nome": "Sojourn", "propriedades": {}}, {"id": "habilidade_sojourn", "tipo": "Habilidade", "nome": "Overclock", "propriedades": {"heroi": "Sojourn"}}, {"id": "heroi_symmetra", "tipo": "Heroi", "nome": "Symmetra", "propriedades": {}}, {"id": "habilidade_symmetra", "tipo": "Habilidade", "nome": "Photon Barrier", "propriedades": {"heroi": "Symmetra"}}, {"id": "heroi_venture", "tipo": "Heroi", "nome": "Venture", "propriedades": {}}, {"id": "habilidade_venture", "tipo": "Habilidade", "nome": "Tectonic Shock", "propriedades": {"heroi": "Venture"}}, {"id": "heroi_brigitte", "tipo": "Heroi", "nome": "Brigitte", "propriedades": {}}, {"id": "habilidade_brigitte", "tipo": "Habilidade", "nome": "Rally", "propriedades": {"heroi": "Brigitte"}}, {"id": "heroi_illari", "tipo": "Heroi", "nome": "Illari", "propriedades": {}}, {"id": "habilidade_illari", "tipo": "Habilidade", "nome": "Captive Sun", "propriedades": {"heroi": "Illari"}}, {"id": "heroi_juno", "tipo": "Heroi", "nome": "Juno", "propriedades": {}}, {"id": "habilidade_juno", "tipo": "Habilidade", "nome": "Orbital Ray", "propriedades": {"heroi": "Juno"}}, {"id": "heroi_kiriko", "tipo": "Heroi", "nome": "Kiriko", "propriedades": {}}, {"id": "habilidade_kiriko", "tipo": "Habilidade", "nome": "Kitsune Rush", "propriedades": {"heroi": "Kiriko"}}, {"id": "heroi_lifeweaver", "tipo": "Heroi", "nome": "Lifeweaver", "propriedades": {}}, {"id": "habilidade_lifeweaver", "tipo": "Habilidade", "nome": "Tree of Life", "propriedades": {"heroi": "Lifeweaver"}}], "arestas": [{"origem": "sub_bruiser", "destino": "classe_tanque", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_stalwart", "destino": "classe_tanque", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_iniciador", "destino": "classe_tanque", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_flanker", "destino": "classe_dano", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_specialist", "destino": "classe_dano", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_sharpshooter", "destino": "classe_dano", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_recon", "destino": "classe_dano", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_medic", "destino": "classe_suporte", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_tactician", "destino": "classe_suporte", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_survivor", "destino": "classe_suporte", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "heroi_reinhardt", "destino": "classe_tanque", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_reinhardt", "destino": "sub_stalwart", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_reinhardt", "destino": "nac_alemanha", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_reinhardt", "destino": "habilidade_reinhardt", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_reinhardt", "destino": "org_overwatch", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_reinhardt", "destino": "mapa_eichenwalde", "tipo": "JOGAVEL_EM", "propriedades": {}}, {"origem": "heroi_reinhardt", "destino": "heroi_torbjorn", "tipo": "COUNTER", "propriedades": {"motivo": "Escudo Barreira bloqueia o fogo da torreta"}}, {"origem": "heroi_reinhardt", "destino": "heroi_zenyatta", "tipo": "SINERGIA", "propriedades": {"motivo": "Escudo protege o suporte enquanto o Orbe amplifica o dano do time"}}, {"origem": "heroi_reinhardt", "destino": "heroi_mercy", "tipo": "SINERGIA", "propriedades": {"motivo": "Escudo protege o alvo do Feixe de Cura, mantendo o tanque na frente"}}, {"origem": "heroi_sigma", "destino": "classe_tanque", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_sigma", "destino": "sub_stalwart", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_sigma", "destino": "nac_holanda", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_sigma", "destino": "habilidade_sigma", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_sigma", "destino": "org_nullsector", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_doomfist", "destino": "classe_tanque", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_doomfist", "destino": "sub_bruiser", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_doomfist", "destino": "nac_nigeria", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_doomfist", "destino": "habilidade_doomfist", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_doomfist", "destino": "org_talon", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_doomfist", "destino": "mapa_numbani", "tipo": "JOGAVEL_EM", "propriedades": {}}, {"origem": "heroi_roadhog", "destino": "classe_tanque", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_roadhog", "destino": "sub_bruiser", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_roadhog", "destino": "nac_australia", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_roadhog", "destino": "habilidade_roadhog", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_roadhog", "destino": "heroi_genji", "tipo": "COUNTER", "propriedades": {"motivo": "Ganchada seguida de dano corpo a corpo elimina alvos frágeis"}}, {"origem": "heroi_winston", "destino": "classe_tanque", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_winston", "destino": "sub_iniciador", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_winston", "destino": "nac_estados_unidos", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_winston", "destino": "habilidade_winston", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_winston", "destino": "org_overwatch", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_winston", "destino": "org_horizon", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_winston", "destino": "heroi_widowmaker", "tipo": "COUNTER", "propriedades": {"motivo": "Pula na sniper e a força a fugir do campo aberto"}}, {"origem": "heroi_winston", "destino": "heroi_ashe", "tipo": "COUNTER", "propriedades": {"motivo": "Fecha a distância rapidamente contra heróis de longo alcance"}}, {"origem": "heroi_dva", "destino": "classe_tanque", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_dva", "destino": "sub_iniciador", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_dva", "destino": "nac_coreia_do_sul", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_dva", "destino": "habilidade_dva", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_dva", "destino": "heroi_widowmaker", "tipo": "COUNTER", "propriedades": {"motivo": "Absorve tiros com Matriz de Defesa e avança sobre a sniper"}}, {"origem": "heroi_dva", "destino": "heroi_moira", "tipo": "SINERGIA", "propriedades": {"motivo": "Mergulho da mecha é sustentado pela cura de longo alcance da Moira"}}, {"origem": "heroi_genji", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_genji", "destino": "sub_flanker", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_genji", "destino": "nac_japao", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_genji", "destino": "habilidade_genji", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_genji", "destino": "mapa_hanamura", "tipo": "JOGAVEL_EM", "propriedades": {}}, {"origem": "heroi_genji", "destino": "heroi_ana", "tipo": "SINERGIA", "propriedades": {"motivo": "Nano Boost potencializa o dano da Lâmina do Dragão"}}, {"origem": "heroi_genji", "destino": "heroi_zenyatta", "tipo": "SINERGIA", "propriedades": {"motivo": "Refletir + Orbe da Discórdia formam um combo agressivo de dano"}}, {"origem": "heroi_tracer", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_tracer", "destino": "sub_flanker", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_tracer", "destino": "nac_reino_unido", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_tracer", "destino": "habilidade_tracer", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_tracer", "destino": "org_overwatch", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_tracer", "destino": "mapa_kings_row", "tipo": "JOGAVEL_EM", "propriedades": {}}, {"origem": "heroi_torbjorn", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_torbjorn", "destino": "sub_specialist", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_torbjorn", "destino": "nac_suecia", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_torbjorn", "destino": "habilidade_torbjorn", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_torbjorn", "destino": "heroi_genji", "tipo": "COUNTER", "propriedades": {"motivo": "Torreta automática pune flankers que se aproximam sem cobertura"}}, {"origem": "heroi_torbjorn", "destino": "heroi_reinhardt", "tipo": "SINERGIA", "propriedades": {"motivo": "Escudo protege a torreta, permitindo dano constante e seguro"}}, {"origem": "heroi_mei", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_mei", "destino": "sub_specialist", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_mei", "destino": "nac_china", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_mei", "destino": "habilidade_mei", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_mei", "destino": "heroi_genji", "tipo": "COUNTER", "propriedades": {"motivo": "Parede de gelo interrompe mobilidade e Congelar imobiliza rapidamente"}}, {"origem": "heroi_mei", "destino": "heroi_tracer", "tipo": "COUNTER", "propriedades": {"motivo": "Congelar anula flankers de curto alcance antes que causem dano"}}, {"origem": "heroi_ashe", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_ashe", "destino": "sub_sharpshooter", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_ashe", "destino": "nac_estados_unidos", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_ashe", "destino": "habilidade_ashe", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_ashe", "destino": "org_deadlock", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_ashe", "destino": "mapa_route_66", "tipo": "JOGAVEL_EM", "propriedades": {}}, {"origem": "heroi_widowmaker", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_widowmaker", "destino": "sub_sharpshooter", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_widowmaker", "destino": "nac_franca", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_widowmaker", "destino": "habilidade_widowmaker", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_widowmaker", "destino": "org_talon", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_widowmaker", "destino": "heroi_roadhog", "tipo": "COUNTER", "propriedades": {"motivo": "Alcance e dano crítico alto puni tanques lentos à distância"}}, {"origem": "heroi_widowmaker", "destino": "heroi_reinhardt", "tipo": "COUNTER", "propriedades": {"motivo": "Poke de longo alcance sem risco contra tanques que avançam devagar"}}, {"origem": "heroi_widowmaker", "destino": "heroi_sombra", "tipo": "SINERGIA", "propriedades": {"motivo": "Hackear revela alvos para a sniper eliminar com segurança"}}, {"origem": "heroi_pharah", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_pharah", "destino": "sub_recon", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_pharah", "destino": "nac_egito", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_pharah", "destino": "habilidade_pharah", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_pharah", "destino": "heroi_roadhog", "tipo": "COUNTER", "propriedades": {"motivo": "Voo mantém distância seguro de um herói sem alcance vertical"}}, {"origem": "heroi_pharah", "destino": "heroi_mercy", "tipo": "SINERGIA", "propriedades": {"motivo": "Voo Guiado permite à Mercy amplificar o dano da Pharah no ar (Pharmercy)"}}, {"origem": "heroi_sombra", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_sombra", "destino": "sub_recon", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_sombra", "destino": "nac_mexico", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_sombra", "destino": "habilidade_sombra", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_sombra", "destino": "org_talon", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_sombra", "destino": "heroi_widowmaker", "tipo": "COUNTER", "propriedades": {"motivo": "Hackear impede o uso da mira e do gancho de fuga"}}, {"origem": "heroi_sombra", "destino": "heroi_ana", "tipo": "COUNTER", "propriedades": {"motivo": "Hackear bloqueia granadas de cura e dardo de sono"}}, {"origem": "heroi_sombra", "destino": "heroi_doomfist", "tipo": "SINERGIA", "propriedades": {"motivo": "Hackear cria abertura para o combo de mobilidade do Doomfist"}}, {"origem": "heroi_ana", "destino": "classe_suporte", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_ana", "destino": "sub_medic", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_ana", "destino": "nac_egito", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_ana", "destino": "habilidade_ana", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_ana", "destino": "org_overwatch", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_ana", "destino": "heroi_genji", "tipo": "COUNTER", "propriedades": {"motivo": "Dardo do Sono neutraliza a Lâmina do Dragão antes que cause dano"}}, {"origem": "heroi_ana", "destino": "heroi_reinhardt", "tipo": "SINERGIA", "propriedades": {"motivo": "Granada de Bio-cura aumenta a cura recebida pelo tanque na frente"}}, {"origem": "heroi_mercy", "destino": "classe_suporte", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_mercy", "destino": "sub_medic", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_mercy", "destino": "nac_suica", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_mercy", "destino": "habilidade_mercy", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_mercy", "destino": "org_overwatch", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_zenyatta", "destino": "classe_suporte", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_zenyatta", "destino": "sub_tactician", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_zenyatta", "destino": "nac_nepal", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_zenyatta", "destino": "habilidade_zenyatta", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_zenyatta", "destino": "org_shambali", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_zenyatta", "destino": "mapa_ilios", "tipo": "JOGAVEL_EM", "propriedades": {}}, {"origem": "heroi_zenyatta", "destino": "heroi_roadhog", "tipo": "COUNTER", "propriedades": {"motivo": "Orbe da Discórdia aumenta o dano recebido e acelera o abate"}}, {"origem": "heroi_baptiste", "destino": "classe_suporte", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_baptiste", "destino": "sub_tactician", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_baptiste", "destino": "nac_haiti", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_baptiste", "destino": "habilidade_baptiste", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_baptiste", "destino": "heroi_dva", "tipo": "COUNTER", "propriedades": {"motivo": "Campo de Imunidade neutraliza mergulhos de mecha"}}, {"origem": "heroi_baptiste", "destino": "heroi_ashe", "tipo": "SINERGIA", "propriedades": {"motivo": "Campo de Imunidade protege a sniper contra investidas"}}, {"origem": "heroi_moira", "destino": "classe_suporte", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_moira", "destino": "sub_survivor", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_moira", "destino": "nac_irlanda", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_moira", "destino": "habilidade_moira", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_lucio", "destino": "classe_suporte", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_lucio", "destino": "sub_survivor", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_lucio", "destino": "nac_brasil", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_lucio", "destino": "habilidade_lucio", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_lucio", "destino": "heroi_doomfist", "tipo": "SINERGIA", "propriedades": {"motivo": "Velocidade Amplificada potencializa investidas do Doomfist"}}, {"origem": "sub_incursao", "destino": "classe_tanque", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_robustez", "destino": "classe_tanque", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_combate", "destino": "classe_tanque", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_especialidade", "destino": "classe_dano", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_artilharia", "destino": "classe_dano", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_reconhecimento", "destino": "classe_dano", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_flanqueamento", "destino": "classe_dano", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_estrategia", "destino": "classe_suporte", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_restauracao", "destino": "classe_suporte", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "sub_sobrevivencia", "destino": "classe_suporte", "tipo": "SUBCLASSE_DE", "propriedades": {}}, {"origem": "heroi_hazard", "destino": "classe_tanque", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_hazard", "destino": "sub_robustez", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_hazard", "destino": "nac_escocia", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_hazard", "destino": "habilidade_hazard", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_mauga", "destino": "classe_tanque", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_mauga", "destino": "sub_combate", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_mauga", "destino": "nac_samoa", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_mauga", "destino": "habilidade_mauga", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_mauga", "destino": "org_talon", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_orisa", "destino": "classe_tanque", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_orisa", "destino": "sub_combate", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_orisa", "destino": "nac_numbani", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_orisa", "destino": "habilidade_orisa", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_orisa", "destino": "org_numbani", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_rainha_junker", "destino": "classe_tanque", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_rainha_junker", "destino": "sub_combate", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_rainha_junker", "destino": "nac_australia", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_rainha_junker", "destino": "habilidade_rainha_junker", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_rainha_junker", "destino": "org_junkers", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_ramattra", "destino": "classe_tanque", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_ramattra", "destino": "sub_robustez", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_ramattra", "destino": "nac_nepal", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_ramattra", "destino": "habilidade_ramattra", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_ramattra", "destino": "org_nullsector", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_wrecking_ball", "destino": "classe_tanque", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_wrecking_ball", "destino": "sub_incursao", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_wrecking_ball", "destino": "nac_lua", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_wrecking_ball", "destino": "habilidade_wrecking_ball", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_zarya", "destino": "classe_tanque", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_zarya", "destino": "sub_combate", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_zarya", "destino": "nac_russia", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_zarya", "destino": "habilidade_zarya", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_bastion", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_bastion", "destino": "sub_especialidade", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_bastion", "destino": "habilidade_bastion", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_cassidy", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_cassidy", "destino": "sub_artilharia", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_cassidy", "destino": "nac_estados_unidos", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_cassidy", "destino": "habilidade_cassidy", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_cassidy", "destino": "org_overwatch", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_echo", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_echo", "destino": "sub_reconhecimento", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_echo", "destino": "nac_singapura", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_echo", "destino": "habilidade_echo", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_freja", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_freja", "destino": "sub_artilharia", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_freja", "destino": "nac_escocia", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_freja", "destino": "habilidade_freja", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_hanzo", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_hanzo", "destino": "sub_artilharia", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_hanzo", "destino": "nac_japao", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_hanzo", "destino": "habilidade_hanzo", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_hanzo", "destino": "org_shimada", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_junkrat", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_junkrat", "destino": "sub_especialidade", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_junkrat", "destino": "nac_australia", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_junkrat", "destino": "habilidade_junkrat", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_junkrat", "destino": "org_junkers", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_reaper", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_reaper", "destino": "sub_flanqueamento", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_reaper", "destino": "nac_estados_unidos", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_reaper", "destino": "habilidade_reaper", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_reaper", "destino": "org_talon", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_soldado76", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_soldado76", "destino": "sub_artilharia", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_soldado76", "destino": "nac_estados_unidos", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_soldado76", "destino": "habilidade_soldado76", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_soldado76", "destino": "org_overwatch", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_sojourn", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_sojourn", "destino": "sub_artilharia", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_sojourn", "destino": "nac_canada", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_sojourn", "destino": "habilidade_sojourn", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_sojourn", "destino": "org_overwatch", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_symmetra", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_symmetra", "destino": "sub_especialidade", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_symmetra", "destino": "nac_india", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_symmetra", "destino": "habilidade_symmetra", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_symmetra", "destino": "org_vishkar", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_venture", "destino": "classe_dano", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_venture", "destino": "sub_flanqueamento", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_venture", "destino": "nac_canada", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_venture", "destino": "habilidade_venture", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_brigitte", "destino": "classe_suporte", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_brigitte", "destino": "sub_sobrevivencia", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_brigitte", "destino": "nac_suecia", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_brigitte", "destino": "habilidade_brigitte", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_brigitte", "destino": "org_overwatch", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_illari", "destino": "classe_suporte", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_illari", "destino": "sub_sobrevivencia", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_illari", "destino": "nac_peru", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_illari", "destino": "habilidade_illari", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_juno", "destino": "classe_suporte", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_juno", "destino": "sub_sobrevivencia", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_juno", "destino": "nac_marte", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_juno", "destino": "habilidade_juno", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_kiriko", "destino": "classe_suporte", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_kiriko", "destino": "sub_sobrevivencia", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_kiriko", "destino": "nac_japao", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_kiriko", "destino": "habilidade_kiriko", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_kiriko", "destino": "org_shimada", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_lifeweaver", "destino": "classe_suporte", "tipo": "PERTENCE_CLASSE", "propriedades": {}}, {"origem": "heroi_lifeweaver", "destino": "sub_restauracao", "tipo": "TEM_SUBCLASSE", "propriedades": {}}, {"origem": "heroi_lifeweaver", "destino": "nac_tailandia", "tipo": "NACIONALIDADE", "propriedades": {}}, {"origem": "heroi_lifeweaver", "destino": "habilidade_lifeweaver", "tipo": "TEM_HABILIDADE", "propriedades": {}}, {"origem": "heroi_lifeweaver", "destino": "org_vishkar", "tipo": "MEMBRO_DE", "propriedades": {}}, {"origem": "heroi_zarya", "destino": "heroi_genji", "tipo": "COUNTER", "propriedades": {"motivo": "Barreira de Partículas absorve dano da investida, permitindo revidar com o laser carregado"}}, {"origem": "heroi_zarya", "destino": "heroi_mauga", "tipo": "SINERGIA", "propriedades": {"motivo": "Barreira protege o tanque de combate enquanto ele mantém a Sobrecarga Cardíaca ativa"}}, {"origem": "heroi_orisa", "destino": "heroi_widowmaker", "tipo": "COUNTER", "propriedades": {"motivo": "Fortificar reduz o dano crítico da sniper e permite avançar sem ser interrompida"}}, {"origem": "heroi_orisa", "destino": "heroi_zenyatta", "tipo": "SINERGIA", "propriedades": {"motivo": "Surto Terrestre agrupa os inimigos para o Orbe da Discórdia amplificar o dano"}}, {"origem": "heroi_ramattra", "destino": "heroi_winston", "tipo": "COUNTER", "propriedades": {"motivo": "Barreira do Vazio bloqueia o salto e o dano corpo a corpo do Winston"}}, {"origem": "heroi_ramattra", "destino": "heroi_moira", "tipo": "SINERGIA", "propriedades": {"motivo": "O Golpe Biótico sustenta a vida extra do Ramattra durante a Forma Nêmesis"}}, {"origem": "heroi_wrecking_ball", "destino": "heroi_widowmaker", "tipo": "COUNTER", "propriedades": {"motivo": "Gancho de Adesão fecha a distância rapidamente contra franco-atiradores"}}, {"origem": "heroi_wrecking_ball", "destino": "heroi_dva", "tipo": "SINERGIA", "propriedades": {"motivo": "Ambos formam uma dupla de mergulho, pressionando o time adversário juntos"}}, {"origem": "heroi_mauga", "destino": "heroi_rainha_junker", "tipo": "SINERGIA", "propriedades": {"motivo": "Grito de Comando aumenta o dano de ambos os tanques agressivos na linha de frente"}}, {"origem": "heroi_rainha_junker", "destino": "heroi_roadhog", "tipo": "COUNTER", "propriedades": {"motivo": "O sangramento da Lâmina Serrilhada reduz a cura recebida, anulando o Whole Hog"}}, {"origem": "heroi_hazard", "destino": "heroi_tracer", "tipo": "COUNTER", "propriedades": {"motivo": "Alcance e controle de área dificultam a aproximação de flanqueadores ágeis"}}, {"origem": "heroi_hazard", "destino": "heroi_ana", "tipo": "SINERGIA", "propriedades": {"motivo": "A cura de longo alcance da Ana sustenta o Hazard enquanto ele avança"}}, {"origem": "heroi_cassidy", "destino": "heroi_roadhog", "tipo": "COUNTER", "propriedades": {"motivo": "Granada Magnética remove a blindagem e Laço captura o gancho do Roadhog"}}, {"origem": "heroi_cassidy", "destino": "heroi_zarya", "tipo": "SINERGIA", "propriedades": {"motivo": "Granada Magnética marca o alvo para o laser carregado da Zarya"}}, {"origem": "heroi_hanzo", "destino": "heroi_pharah", "tipo": "COUNTER", "propriedades": {"motivo": "Flechas da Tempestade causam dano bônus contra alvos no ar"}}, {"origem": "heroi_hanzo", "destino": "heroi_zenyatta", "tipo": "SINERGIA", "propriedades": {"motivo": "Orbe da Discórdia amplifica o dano das flechas de Hanzo"}}, {"origem": "heroi_junkrat", "destino": "heroi_bastion", "tipo": "COUNTER", "propriedades": {"motivo": "Armadilha de Aço e Mina de Concussão desativam a configuração fixa do Bastion"}}, {"origem": "heroi_junkrat", "destino": "heroi_lucio", "tipo": "SINERGIA", "propriedades": {"motivo": "Velocidade Amplificada melhora o posicionamento do RIP-Tire"}}, {"origem": "heroi_reaper", "destino": "heroi_mercy", "tipo": "COUNTER", "propriedades": {"motivo": "Buquê da Morte elimina alvos frágeis antes que consigam fugir"}}, {"origem": "heroi_reaper", "destino": "heroi_zarya", "tipo": "SINERGIA", "propriedades": {"motivo": "A Barreira de Partículas protege o Reaper enquanto ele se aproxima"}}, {"origem": "heroi_soldado76", "destino": "heroi_torbjorn", "tipo": "COUNTER", "propriedades": {"motivo": "Foguetes Helix destroem torretas à distância com segurança"}}, {"origem": "heroi_soldado76", "destino": "heroi_baptiste", "tipo": "SINERGIA", "propriedades": {"motivo": "Campo Biótico e Matriz de Amplificação sustentam o dano constante"}}, {"origem": "heroi_sojourn", "destino": "heroi_widowmaker", "tipo": "COUNTER", "propriedades": {"motivo": "Tiro Disruptor remove buffs e o Deslize fecha a distância rapidamente"}}, {"origem": "heroi_sojourn", "destino": "heroi_ana", "tipo": "SINERGIA", "propriedades": {"motivo": "Nano Boost potencializa o Tiro Carregado do Railgun"}}, {"origem": "heroi_symmetra", "destino": "heroi_winston", "tipo": "COUNTER", "propriedades": {"motivo": "Torretas Sentinela e Barreira de Fóton bloqueiam heróis de mergulho"}}, {"origem": "heroi_symmetra", "destino": "heroi_mei", "tipo": "SINERGIA", "propriedades": {"motivo": "Parede de Gelo e Teletransportador criam rotas de flanco seguras"}}, {"origem": "heroi_venture", "destino": "heroi_widowmaker", "tipo": "COUNTER", "propriedades": {"motivo": "A escavação permite surgir sob a sniper e eliminá-la de perto"}}, {"origem": "heroi_venture", "destino": "heroi_mauga", "tipo": "SINERGIA", "propriedades": {"motivo": "Dois heróis de combate próximo pressionam juntos a linha de frente"}}, {"origem": "heroi_echo", "destino": "heroi_reinhardt", "tipo": "COUNTER", "propriedades": {"motivo": "Duplicar pode copiar o kit de um herói inimigo para virar o combate contra o próprio tanque"}}, {"origem": "heroi_bastion", "destino": "heroi_reinhardt", "tipo": "SINERGIA", "propriedades": {"motivo": "O escudo do Reinhardt protege a Configuração: Artilharia enquanto ela dispara"}}, {"origem": "heroi_freja", "destino": "heroi_tracer", "tipo": "COUNTER", "propriedades": {"motivo": "Alcance e mobilidade vertical dificultam a aproximação de flanqueadores curtos"}}, {"origem": "heroi_brigitte", "destino": "heroi_genji", "tipo": "COUNTER", "propriedades": {"motivo": "Escudo e Atordoar interrompem os combos corpo a corpo do Genji"}}, {"origem": "heroi_brigitte", "destino": "heroi_reinhardt", "tipo": "SINERGIA", "propriedades": {"motivo": "Kit de Reparo mantém a barreira do tanque saudável durante o combate"}}, {"origem": "heroi_illari", "destino": "heroi_tracer", "tipo": "COUNTER", "propriedades": {"motivo": "Sol Cativo pode eliminar flanqueadores ágeis à queima-roupa"}}, {"origem": "heroi_illari", "destino": "heroi_orisa", "tipo": "SINERGIA", "propriedades": {"motivo": "O Pilar de Cura mantém o tanque em combate prolongado na linha de frente"}}, {"origem": "heroi_juno", "destino": "heroi_sombra", "tipo": "COUNTER", "propriedades": {"motivo": "O Disco Hipertônico remove efeitos negativos, contrariando a invisibilidade e o hackeio"}}, {"origem": "heroi_juno", "destino": "heroi_venture", "tipo": "SINERGIA", "propriedades": {"motivo": "Mobilidade elevada de ambos permite avanços agressivos com cura constante"}}, {"origem": "heroi_kiriko", "destino": "heroi_ana", "tipo": "COUNTER", "propriedades": {"motivo": "A Suzu de Proteção remove o efeito do Dardo do Sono instantaneamente"}}, {"origem": "heroi_kiriko", "destino": "heroi_genji", "tipo": "SINERGIA", "propriedades": {"motivo": "Passo Veloz reposiciona e a Investida da Raposa potencializa combos de dano"}}, {"origem": "heroi_lifeweaver", "destino": "heroi_hanzo", "tipo": "COUNTER", "propriedades": {"motivo": "Vínculo de Vida resgata aliados antes que ataques de longo alcance causem a eliminação"}}, {"origem": "heroi_lifeweaver", "destino": "heroi_reinhardt", "tipo": "SINERGIA", "propriedades": {"motivo": "A Plataforma de Pétalas oferece novos ângulos de cura durante o avanço do tanque"}}]};
+const ORIGINAL_DATA = JSON.parse(JSON.stringify(RAW_DATA));
+
+// ---------- config visual por tipo de nó ----------
+const TYPE_COLOR = {
+  Heroi: '#ff9d1a',
+  Classe: '#3ad6ff',
+  Subclasse: '#7fd858',
+  Mapa: '#b98aff',
+  Nacionalidade: '#ffd75e',
+  Organizacao: '#ff5c7a',
+  Habilidade: '#6e7d8d',
+};
+const TYPE_LABEL = {
+  Heroi: 'HERÓI', Classe: 'CLASSE', Subclasse: 'SUBCLASSE', Mapa: 'MAPA',
+  Nacionalidade: 'NACIONALIDADE', Organizacao: 'ORGANIZAÇÃO', Habilidade: 'HABILIDADE',
+};
+const TYPE_RADIUS = { Heroi: 15, Classe: 13, Subclasse: 10, Mapa: 7, Nacionalidade: 7, Organizacao: 8, Habilidade: 6 };
+const DEFAULT_RADIUS = 8, DEFAULT_COLOR = '#9aa7b5';
+
+const REL_LABEL = {
+  COUNTER: 'COUNTER', SINERGIA: 'SINERGIA', PERTENCE_CLASSE: 'classe',
+  TEM_SUBCLASSE: 'subclasse', SUBCLASSE_DE: 'subclasse de', NACIONALIDADE: 'nacionalidade',
+  TEM_HABILIDADE: 'habilidade', MEMBRO_DE: 'organização', JOGAVEL_EM: 'mapa',
+};
+const REL_TYPES = ['COUNTER','SINERGIA','PERTENCE_CLASSE','TEM_SUBCLASSE','SUBCLASSE_DE','NACIONALIDADE','TEM_HABILIDADE','MEMBRO_DE','JOGAVEL_EM'];
+
+function typeColor(t){ return TYPE_COLOR[t] || DEFAULT_COLOR; }
+function typeRadius(t){ return TYPE_RADIUS[t] || DEFAULT_RADIUS; }
+
+function relClass(tipo){
+  if (tipo === 'COUNTER') return 'counter';
+  if (tipo === 'SINERGIA') return 'sinergia';
+  return 'estrutural';
+}
+
+// ---------- estado dos filtros ----------
+const typeState = { Heroi:true, Classe:true, Subclasse:true, Mapa:false, Nacionalidade:false, Organizacao:false, Habilidade:false };
+const relState = { COUNTER:true, SINERGIA:true, ESTRUTURAL:true };
+let searchTerm = '';
+let selectedId = null;
+
+let nodesById = {};
+function reindexNodes(){
+  nodesById = {};
+  RAW_DATA.nos.forEach(n => nodesById[n.id] = n);
+}
+reindexNodes();
+
+// ---------- chips de tipo (dinâmico, cobre também tipos customizados) ----------
+const typeChipsEl = document.getElementById('type-chips');
+function renderTypeChips(){
+  const knownTypes = Object.keys(typeState);
+  const customTypes = [...new Set(RAW_DATA.nos.map(n => n.tipo))].filter(t => !knownTypes.includes(t));
+  customTypes.forEach(t => { if (!(t in typeState)) typeState[t] = true; });
+
+  typeChipsEl.innerHTML = '';
+  [...knownTypes, ...customTypes].forEach(t => {
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (typeState[t] ? ' on' : '');
+    chip.textContent = TYPE_LABEL[t] || t.toUpperCase();
+    chip.style.background = typeState[t] ? typeColor(t) : '';
+    chip.onclick = () => {
+      typeState[t] = !typeState[t];
+      chip.classList.toggle('on');
+      chip.style.background = typeState[t] ? typeColor(t) : '';
+      rebuild();
+    };
+    typeChipsEl.appendChild(chip);
+  });
+}
+
+const relChipsEl = document.getElementById('rel-chips');
+const relColors = { COUNTER: '#ff5c7a', SINERGIA: '#7fd858', ESTRUTURAL: '#7c8b9c' };
+Object.keys(relState).forEach(r => {
+  const chip = document.createElement('div');
+  chip.className = 'chip on';
+  chip.textContent = r;
+  chip.style.background = relColors[r];
+  chip.onclick = () => {
+    relState[r] = !relState[r];
+    chip.classList.toggle('on');
+    chip.style.background = relState[r] ? relColors[r] : '';
+    rebuild();
+  };
+  relChipsEl.appendChild(chip);
+});
+
+// ---------- legenda ----------
+function renderLegend(){
+  const legendEl = document.getElementById('legend');
+  const allTypes = [...new Set(RAW_DATA.nos.map(n => n.tipo))];
+  legendEl.innerHTML = '<div class="title">TIPOS DE NÓ</div>' +
+    allTypes.map(t =>
+      `<div class="legend-row"><span class="swatch ${t==='Heroi'?'hex':''}" style="background:${typeColor(t)}"></span>${TYPE_LABEL[t] || t.toUpperCase()}</div>`
+    ).join('');
+}
+
+// ---------- toast ----------
+let toastTimer = null;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ---------- d3 setup ----------
+const svg = d3.select('#canvas');
+const container = svg.append('g');
+
+svg.call(d3.zoom().scaleExtent([0.25, 4]).on('zoom', (ev) => {
+  container.attr('transform', ev.transform);
+}));
+
+let width = window.innerWidth, height = window.innerHeight;
+window.addEventListener('resize', () => {
+  width = window.innerWidth; height = window.innerHeight;
+  simulation.force('center', d3.forceCenter(width/2, height/2));
+  simulation.alpha(0.3).restart();
+});
+
+const linkLayer = container.append('g').attr('class', 'links');
+const nodeLayer = container.append('g').attr('class', 'nodes');
+
+let simulation = d3.forceSimulation()
+  .force('link', d3.forceLink().id(d => d.id).distance(d => d.tipo === 'COUNTER' || d.tipo === 'SINERGIA' ? 130 : 60).strength(0.5))
+  .force('charge', d3.forceManyBody().strength(-260))
+  .force('center', d3.forceCenter(width/2, height/2))
+  .force('collide', d3.forceCollide(d => typeRadius(d.tipo) + 14));
+
+let linkSel, nodeSel;
+let currentNodes = [], currentLinks = [];
+const posCache = {};
+
+function visibleNodeIds(){
+  return new Set(RAW_DATA.nos.filter(n => typeState[n.tipo]).map(n => n.id));
+}
+
+function rebuild(){
+  renderTypeChips();
+  renderLegend();
+  const vis = visibleNodeIds();
+  currentNodes = RAW_DATA.nos.filter(n => vis.has(n.id)).map(n => {
+    const cached = posCache[n.id];
+    return Object.assign({}, n, cached ? {x:cached.x, y:cached.y, vx:0, vy:0} : {});
+  });
+  currentLinks = RAW_DATA.arestas.filter(a => {
+    if (!vis.has(a.origem) || !vis.has(a.destino)) return false;
+    const cls = relClass(a.tipo);
+    if (cls === 'counter') return relState.COUNTER;
+    if (cls === 'sinergia') return relState.SINERGIA;
+    return relState.ESTRUTURAL;
+  }).map(a => Object.assign({}, a, {source: a.origem, target: a.destino}));
+
+  draw();
+}
+
+function draw(){
+  const term = searchTerm.trim().toLowerCase();
+
+  linkSel = linkLayer.selectAll('path.link').data(currentLinks, d => d.origem+'|'+d.destino+'|'+d.tipo);
+  linkSel.exit().remove();
+  const linkEnter = linkSel.enter().append('path')
+    .attr('class', d => 'link ' + relClass(d.tipo))
+    .attr('marker-end', d => relClass(d.tipo) === 'counter' ? 'url(#arrow)' : null);
+  linkSel = linkEnter.merge(linkSel);
+
+  nodeSel = nodeLayer.selectAll('g.node-group').data(currentNodes, d => d.id);
+  nodeSel.exit().remove();
+  const nodeEnter = nodeSel.enter().append('g').attr('class', 'node-group');
+
+  nodeEnter.each(function(d){
+    const g = d3.select(this);
+    const r = typeRadius(d.tipo);
+    if (d.tipo === 'Heroi'){
+      g.append('polygon')
+        .attr('class', 'node-shape')
+        .attr('points', hexPoints(r))
+        .attr('fill', typeColor(d.tipo));
+    } else {
+      g.append('circle')
+        .attr('class', 'node-shape')
+        .attr('r', r)
+        .attr('fill', typeColor(d.tipo));
+    }
+    g.append('text')
+      .attr('class', 'node-label' + (d.tipo === 'Heroi' ? '' : ' small'))
+      .attr('text-anchor', 'middle')
+      .attr('y', r + (d.tipo === 'Heroi' ? 15 : 11))
+      .text(d.nome);
+  });
+
+  nodeEnter.call(d3.drag()
+    .on('start', dragStarted)
+    .on('drag', dragged)
+    .on('end', dragEnded));
+
+  nodeEnter.on('click', (ev, d) => { ev.stopPropagation(); selectNode(d.id); });
+
+  nodeSel = nodeEnter.merge(nodeSel);
+
+  nodeSel.each(function(d){
+    const g = d3.select(this);
+    g.select('.node-shape').attr('fill', typeColor(d.tipo));
+    g.select('.node-label').text(d.nome);
+  });
+
+  nodeSel.select('.node-shape')
+    .classed('selected', d => d.id === selectedId)
+    .classed('dim', d => {
+      if (term && !d.nome.toLowerCase().includes(term)) return true;
+      if (selectedId) return !isNeighbor(d.id);
+      return false;
+    });
+  nodeSel.classed('dim', d => {
+    if (term && !d.nome.toLowerCase().includes(term)) return true;
+    if (selectedId) return !isNeighbor(d.id);
+    return false;
+  });
+
+  linkSel.classed('dim', d => selectedId && d.origem !== selectedId && d.destino !== selectedId)
+         .classed('hi', d => selectedId && (d.origem === selectedId || d.destino === selectedId));
+
+  simulation.nodes(currentNodes).on('tick', ticked);
+  simulation.force('link').links(currentLinks);
+  simulation.alpha(0.6).restart();
+}
+
+function hexPoints(r){
+  const pts = [];
+  for (let i=0;i<6;i++){
+    const ang = Math.PI/180 * (60*i - 30);
+    pts.push([r*Math.cos(ang), r*Math.sin(ang)].join(','));
+  }
+  return pts.join(' ');
+}
+
+function isNeighbor(id){
+  if (id === selectedId) return true;
+  return currentLinks.some(l => (l.origem === selectedId && l.destino === id) || (l.destino === selectedId && l.origem === id));
+}
+
+function ticked(){
+  currentNodes.forEach(n => { posCache[n.id] = {x:n.x, y:n.y}; });
+  linkSel.attr('d', d => `M${d.source.x},${d.source.y} L${d.target.x},${d.target.y}`);
+  nodeSel.attr('transform', d => `translate(${d.x},${d.y})`);
+}
+
+function dragStarted(ev, d){
+  if (!ev.active) simulation.alphaTarget(0.25).restart();
+  d.fx = d.x; d.fy = d.y;
+}
+function dragged(ev, d){ d.fx = ev.x; d.fy = ev.y; }
+function dragEnded(ev, d){
+  if (!ev.active) simulation.alphaTarget(0);
+  d.fx = null; d.fy = null;
+}
+
+svg.append('defs').append('marker')
+  .attr('id', 'arrow').attr('viewBox', '0 -4 8 8').attr('refX', 22).attr('refY', 0)
+  .attr('markerWidth', 6).attr('markerHeight', 6).attr('orient', 'auto')
+  .append('path').attr('d', 'M0,-4L8,0L0,4').attr('fill', '#ff5c7a');
+
+// ---------- painel lateral ----------
+const panel = document.getElementById('panel');
+document.getElementById('panel-close').onclick = () => deselect();
+svg.on('click', () => deselect());
+
+function deselect(){
+  selectedId = null;
+  panel.classList.remove('open');
+  draw();
+}
+
+function selectNode(id){
+  if (!nodesById[id]) { deselect(); return; }
+  selectedId = id;
+  const n = nodesById[id];
+  document.getElementById('panel-type').textContent = TYPE_LABEL[n.tipo] || n.tipo.toUpperCase();
+  document.getElementById('panel-type').style.setProperty('--type-color', typeColor(n.tipo));
+  document.querySelector('.panel-head').style.setProperty('--type-color', typeColor(n.tipo));
+  document.getElementById('panel-name').textContent = n.nome;
+
+  const body = document.getElementById('panel-body');
+  body.innerHTML = '';
+
+  const propsKeys = Object.keys(n.propriedades || {});
+  if (propsKeys.length){
+    const sec = document.createElement('div');
+    sec.className = 'panel-section';
+    sec.innerHTML = '<div class="label">DETALHES</div>' + propsKeys.map(k =>
+      `<div class="prop-line"><b>${k}:</b> ${n.propriedades[k]}</div>`).join('');
+    body.appendChild(sec);
+  }
+
+  const outgoing = RAW_DATA.arestas.filter(a => a.origem === id);
+  const incoming = RAW_DATA.arestas.filter(a => a.destino === id);
+
+  const groups = {};
+  outgoing.forEach(a => {
+    const key = a.tipo;
+    groups[key] = groups[key] || [];
+    groups[key].push({ id: a.destino, motivo: a.propriedades && a.propriedades.motivo, origem: a.origem, destino: a.destino, tipo: a.tipo });
+  });
+  incoming.forEach(a => {
+    const key = a.tipo + '_de';
+    groups[key] = groups[key] || [];
+    groups[key].push({ id: a.origem, motivo: a.propriedades && a.propriedades.motivo, origem: a.origem, destino: a.destino, tipo: a.tipo });
+  });
+
+  const order = ['COUNTER','SINERGIA','PERTENCE_CLASSE','TEM_SUBCLASSE','SUBCLASSE_DE','TEM_HABILIDADE','NACIONALIDADE','MEMBRO_DE','JOGAVEL_EM'];
+  const sortedKeys = Object.keys(groups).sort((a,b) => order.indexOf(a.replace('_de','')) - order.indexOf(b.replace('_de','')));
+
+  sortedKeys.forEach(key => {
+    const baseTipo = key.replace('_de','');
+    const isIncoming = key.endsWith('_de') && key !== 'SUBCLASSE_DE';
+    const label = isIncoming ? (REL_LABEL[baseTipo] || baseTipo) + ' de' : (REL_LABEL[baseTipo] || baseTipo);
+    const cls = relClass(baseTipo);
+    const dotColor = cls === 'counter' ? '#ff5c7a' : cls === 'sinergia' ? '#7fd858' : '#7c8b9c';
+
+    const sec = document.createElement('div');
+    sec.className = 'rel-group';
+    let html = `<div class="rel-type"><span class="rel-dot" style="background:${dotColor}"></span>${label.toUpperCase()}</div>`;
+    groups[key].forEach(item => {
+      const target = nodesById[item.id];
+      if (!target) return;
+      html += `<div class="rel-item">
+        <span class="rel-main" data-target="${item.id}">${target.nome}${item.motivo ? `<span class="motivo">${item.motivo}</span>` : ''}</span>
+        <span class="rel-del" data-origem="${item.origem}" data-destino="${item.destino}" data-tipo="${item.tipo}" title="Remover esta relação">✕</span>
+      </div>`;
+    });
+    sec.innerHTML = html;
+    body.appendChild(sec);
+  });
+
+  panel.querySelectorAll('.rel-main').forEach(el => {
+    el.onclick = () => selectNode(el.getAttribute('data-target'));
+  });
+  panel.querySelectorAll('.rel-del').forEach(el => {
+    el.onclick = (ev) => {
+      ev.stopPropagation();
+      removeEdge(el.getAttribute('data-origem'), el.getAttribute('data-destino'), el.getAttribute('data-tipo'));
+      selectNode(id);
+    };
+  });
+
+  panel.classList.add('open');
+  draw();
+}
+
+document.getElementById('btn-remove-node').onclick = () => {
+  if (!selectedId) return;
+  const n = nodesById[selectedId];
+  if (!confirm(`Remover o nó "${n.nome}" e todas as suas relações?`)) return;
+  removeNode(selectedId);
+};
+
+// ---------- busca ----------
+document.getElementById('search').addEventListener('input', (e) => {
+  searchTerm = e.target.value;
+  draw();
+});
+
+// ============================================================
+// OPERAÇÕES DE ESCRITA NO GRAFO (equivalentes ao GrafoConhecimento em Python)
+// ============================================================
+
+function slugify(texto){
+  return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+function gerarIdUnico(tipo, nome){
+  const base = slugify(tipo) + '_' + slugify(nome);
+  let id = base, i = 2;
+  while (nodesById[id]) { id = base + '_' + i; i++; }
+  return id;
+}
+
+function parsePropriedades(texto){
+  const props = {};
+  texto.split('\n').forEach(linha => {
+    const idx = linha.indexOf(':');
+    if (idx === -1) return;
+    const chave = linha.slice(0, idx).trim();
+    const valor = linha.slice(idx + 1).trim();
+    if (chave) props[chave] = valor;
+  });
+  return props;
+}
+
+function addNode(tipo, nome, propriedades){
+  const id = gerarIdUnico(tipo, nome);
+  RAW_DATA.nos.push({ id, tipo, nome, propriedades: propriedades || {} });
+  reindexNodes();
+  rebuild();
+  showToast(`Nó "${nome}" adicionado.`);
+  return id;
+}
+
+function removeNode(id){
+  RAW_DATA.nos = RAW_DATA.nos.filter(n => n.id !== id);
+  RAW_DATA.arestas = RAW_DATA.arestas.filter(a => a.origem !== id && a.destino !== id);
+  delete posCache[id];
+  reindexNodes();
+  deselect();
+  rebuild();
+  showToast('Nó removido.');
+}
+
+function addEdge(origem, destino, tipo, propriedades){
+  RAW_DATA.arestas.push({ origem, destino, tipo, propriedades: propriedades || {} });
+  rebuild();
+  showToast(`Relação "${tipo}" adicionada.`);
+}
+
+function removeEdge(origem, destino, tipo){
+  const antes = RAW_DATA.arestas.length;
+  let removed = false;
+  RAW_DATA.arestas = RAW_DATA.arestas.filter(a => {
+    if (!removed && a.origem === origem && a.destino === destino && a.tipo === tipo){
+      removed = true;
+      return false;
+    }
+    return true;
+  });
+  rebuild();
+  if (removed) showToast('Relação removida.');
+}
+
+function resetData(){
+  if (!confirm('Restaurar o grafo para os dados originais? Todas as edições feitas na sessão serão perdidas.')) return;
+  RAW_DATA.nos = JSON.parse(JSON.stringify(ORIGINAL_DATA.nos));
+  RAW_DATA.arestas = JSON.parse(JSON.stringify(ORIGINAL_DATA.arestas));
+  Object.keys(posCache).forEach(k => delete posCache[k]);
+  reindexNodes();
+  deselect();
+  rebuild();
+  showToast('Grafo restaurado ao original.');
+}
+
+function exportJSON(){
+  const blob = new Blob([JSON.stringify({nos: RAW_DATA.nos, arestas: RAW_DATA.arestas}, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'grafo_overwatch_editado.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importJSONFile(file){
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data.nos) || !Array.isArray(data.arestas)) throw new Error('formato inválido');
+      RAW_DATA.nos = data.nos;
+      RAW_DATA.arestas = data.arestas;
+      Object.keys(posCache).forEach(k => delete posCache[k]);
+      reindexNodes();
+      deselect();
+      rebuild();
+      showToast('Grafo importado com sucesso.');
+    }catch(err){
+      alert('Não foi possível importar o arquivo: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+document.getElementById('btn-export').onclick = exportJSON;
+document.getElementById('btn-import').onclick = () => document.getElementById('file-import').click();
+document.getElementById('file-import').addEventListener('change', (e) => {
+  if (e.target.files[0]) importJSONFile(e.target.files[0]);
+  e.target.value = '';
+});
+document.getElementById('btn-reset').onclick = resetData;
+
+// ============================================================
+// MODAIS: adicionar nó / adicionar relação
+// ============================================================
+const modalOverlay = document.getElementById('modal-overlay');
+const modalEl = document.getElementById('modal');
+
+function closeModal(){ modalOverlay.classList.remove('open'); modalEl.innerHTML = ''; }
+modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+
+function openModal(html){
+  modalEl.innerHTML = html;
+  modalOverlay.classList.add('open');
+}
+
+function allTypeOptions(){
+  const knownTypes = Object.keys(TYPE_LABEL);
+  const customTypes = [...new Set(RAW_DATA.nos.map(n => n.tipo))].filter(t => !knownTypes.includes(t));
+  return [...knownTypes, ...customTypes];
+}
+
+document.getElementById('btn-add-node').onclick = () => {
+  const typeOpts = allTypeOptions().map(t => `<option value="${t}">${TYPE_LABEL[t] || t}</option>`).join('');
+  openModal(`
+    <div class="modal-head"><span>ADICIONAR NÓ</span><button id="modal-x">✕</button></div>
+    <div class="modal-body">
+      <div class="field">
+        <label>TIPO</label>
+        <select id="f-tipo">${typeOpts}<option value="__novo__">+ Novo tipo...</option></select>
+      </div>
+      <div class="field" id="f-tipo-novo-wrap" style="display:none;">
+        <label>NOME DO NOVO TIPO</label>
+        <input id="f-tipo-novo" type="text" placeholder="ex: Ultimate">
+      </div>
+      <div class="field">
+        <label>NOME</label>
+        <input id="f-nome" type="text" placeholder="ex: Kiriko">
+      </div>
+      <div class="field">
+        <label>PROPRIEDADES (opcional, uma por linha: chave: valor)</label>
+        <textarea id="f-props" placeholder="passiva: Cura em área ao usar teletransporte"></textarea>
+      </div>
+      <div class="error-msg" id="f-error"></div>
+      <div class="modal-actions">
+        <button class="btn" id="modal-cancel">Cancelar</button>
+        <button class="btn primary" id="modal-confirm">Adicionar</button>
+      </div>
+    </div>
+  `);
+  document.getElementById('modal-x').onclick = closeModal;
+  document.getElementById('modal-cancel').onclick = closeModal;
+  document.getElementById('f-tipo').onchange = (e) => {
+    document.getElementById('f-tipo-novo-wrap').style.display = e.target.value === '__novo__' ? 'block' : 'none';
+  };
+  document.getElementById('modal-confirm').onclick = () => {
+    let tipo = document.getElementById('f-tipo').value;
+    if (tipo === '__novo__') tipo = document.getElementById('f-tipo-novo').value.trim();
+    const nome = document.getElementById('f-nome').value.trim();
+    const errEl = document.getElementById('f-error');
+    if (!tipo || !nome){
+      errEl.textContent = 'Preencha tipo e nome.'; errEl.classList.add('show'); return;
+    }
+    const props = parsePropriedades(document.getElementById('f-props').value);
+    const id = addNode(tipo, nome, props);
+    closeModal();
+    selectNode(id);
+  };
+};
+
+document.getElementById('btn-add-edge').onclick = () => {
+  const nodeOpts = RAW_DATA.nos.map(n => `<option value="${n.id}">${n.nome} (${TYPE_LABEL[n.tipo] || n.tipo})</option>`).join('');
+  const relOpts = REL_TYPES.map(t => `<option value="${t}">${t}</option>`).join('');
+  openModal(`
+    <div class="modal-head"><span>ADICIONAR RELAÇÃO</span><button id="modal-x">✕</button></div>
+    <div class="modal-body">
+      <div class="field">
+        <label>ORIGEM</label>
+        <select id="f-origem">${nodeOpts}</select>
+      </div>
+      <div class="field">
+        <label>TIPO DE RELAÇÃO</label>
+        <select id="f-rel-tipo">${relOpts}<option value="__novo__">+ Novo tipo...</option></select>
+      </div>
+      <div class="field" id="f-rel-novo-wrap" style="display:none;">
+        <label>NOME DA NOVA RELAÇÃO</label>
+        <input id="f-rel-novo" type="text" placeholder="ex: RIVAL_DE">
+      </div>
+      <div class="field">
+        <label>DESTINO</label>
+        <select id="f-destino">${nodeOpts}</select>
+      </div>
+      <div class="field">
+        <label>MOTIVO / OBSERVAÇÃO (opcional)</label>
+        <input id="f-motivo" type="text" placeholder="ex: Hackear impede a fuga da sniper">
+      </div>
+      <div class="error-msg" id="f-error"></div>
+      <div class="modal-actions">
+        <button class="btn" id="modal-cancel">Cancelar</button>
+        <button class="btn primary" id="modal-confirm">Adicionar</button>
+      </div>
+    </div>
+  `);
+  document.getElementById('modal-x').onclick = closeModal;
+  document.getElementById('modal-cancel').onclick = closeModal;
+  document.getElementById('f-rel-tipo').onchange = (e) => {
+    document.getElementById('f-rel-novo-wrap').style.display = e.target.value === '__novo__' ? 'block' : 'none';
+  };
+  document.getElementById('modal-confirm').onclick = () => {
+    const origem = document.getElementById('f-origem').value;
+    const destino = document.getElementById('f-destino').value;
+    let tipo = document.getElementById('f-rel-tipo').value;
+    if (tipo === '__novo__') tipo = document.getElementById('f-rel-novo').value.trim().toUpperCase().replace(/\s+/g,'_');
+    const motivo = document.getElementById('f-motivo').value.trim();
+    const errEl = document.getElementById('f-error');
+    if (!origem || !destino || !tipo){
+      errEl.textContent = 'Preencha origem, destino e tipo.'; errEl.classList.add('show'); return;
+    }
+    if (origem === destino){
+      errEl.textContent = 'Origem e destino não podem ser o mesmo nó.'; errEl.classList.add('show'); return;
+    }
+    addEdge(origem, destino, tipo, motivo ? {motivo} : {});
+    closeModal();
+    selectNode(origem);
+  };
+};
+
+rebuild();
+</script>
+</body>
+</html>
