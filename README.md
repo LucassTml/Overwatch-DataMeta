@@ -9,6 +9,8 @@
 ![HTML5](https://img.shields.io/badge/HTML5-single%20file-E34F26?logo=html5&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-NetworkX%20prototype-3776AB?logo=python&logoColor=white)
 
+![Overview of the knowledge graph showing heroes, classes and sub-roles connected by counter and synergy edges](screenshots/graph-overview.png)
+
 ---
 
 ## About
@@ -35,6 +37,9 @@ The idea was first prototyped in **Python with NetworkX** to learn how knowledge
 - **Navigation.** Drag nodes, scroll to zoom, and drag the background to pan.
 
 > Edits live in memory for the current session only. Use **Export** to keep your changes.
+
+![Reinhardt selected: his counters and synergies are highlighted in the graph and listed with reasons in the side panel](screenshots/hero-details.png)
+<p align="center"><sub>Selecting a hero highlights their connections and opens the details panel, where each counter and synergy comes with its reason.</sub></p>
 
 ## Dataset at a glance
 
@@ -117,8 +122,9 @@ python ideia.py
 
 ```
 Overwatch-DataMeta/
-├── index.html   # The full web app: styles, embedded dataset, and D3.js logic
-└── ideia.py     # Python/NetworkX prototype of the knowledge graph
+├── index.html     # The full web app: styles, embedded dataset, and D3.js logic
+├── ideia.py       # Python/NetworkX prototype of the knowledge graph
+└── screenshots/   # Images used in this README
 ```
 
 ## Tech stack
