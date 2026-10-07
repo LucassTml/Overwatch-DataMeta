@@ -98,35 +98,6 @@ There's no build step and nothing to install. The whole app is a single `index.h
 
 **Online:** open the [live demo](https://overwatch-data-meta.vercel.app).
 
-**Locally:**
-
-```bash
-git clone https://github.com/LucassTml/Overwatch-DataMeta.git
-cd Overwatch-DataMeta
-python -m http.server 8000
-# then open http://localhost:8000
-```
-
-You can also open `index.html` directly in your browser. An internet connection is needed to load D3.js and Google Fonts from their CDNs.
-
-### Python prototype
-
-`ideia.py` is the original proof of concept. It builds a smaller directed graph with NetworkX and runs a couple of sample queries, such as *"Who does Winston counter?"* and *"Who does Pharah synergize with?"*.
-
-```bash
-pip install networkx matplotlib
-python ideia.py
-```
-
-## Project structure
-
-```
-Overwatch-DataMeta/
-├── index.html     # The full web app: styles, embedded dataset, and D3.js logic
-├── ideia.py       # Python/NetworkX prototype of the knowledge graph
-└── screenshots/   # Images used in this README
-```
-
 ## Tech stack
 
 - **[D3.js v7](https://d3js.org/):** force simulation, drag, and zoom
